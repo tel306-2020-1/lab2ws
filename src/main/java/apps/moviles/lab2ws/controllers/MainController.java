@@ -68,7 +68,7 @@ public class MainController {
         }
     }
 
-    private HashMap<String, Object> validarApiKey(String apiKey,Boolean... getuserKeyId) {
+    private HashMap<String, Object> validarApiKey(String apiKey, Boolean... getuserKeyId) {
         HashMap<String, Object> responseMap = new HashMap<>();
 
         if (apiKey != null) {
@@ -81,7 +81,7 @@ public class MainController {
                     userKeysRepository.save(userKeys);
                     responseMap.put("estado", "ok");
                     responseMap.put("cuota", userKeys.getCuota());
-                    if(getuserKeyId != null){
+                    if (getuserKeyId != null) {
                         responseMap.put("userKeyId", userKeys.getId());
                     }
                     return responseMap;
@@ -188,17 +188,29 @@ public class MainController {
     public ResponseEntity borrarEmpleado(@RequestHeader(value = "api-key", required = false) String apiKey,
                                          @RequestParam(value = "id", required = false) String idStr) {
 
-        HashMap<String, Object> responseMap = validarApiKey(apiKey);
+        HashMap<String, Object> responseMap = validarApiKey(apiKey, true);
+        String grupo = "grupo_" + responseMap.get("userKeyId");
+        responseMap.remove("userKeyId");
 
         if (responseMap.get("estado").equals("ok")) {
             if (idStr != null) {
-                if (employeeRepository.existsById(idStr)) {
-                    employeeRepository.deleteById(idStr);
-                    responseMap.put("estado", "borrado exitoso");
+
+                Optional<Employee> empOpt = employeeRepository.findById(idStr);
+
+                if (empOpt.isPresent()) {
+                    Employee employeeTmp = empOpt.get();
+                    if (employeeTmp.getCreatedBy().equals(grupo)) {
+                        employeeRepository.deleteById(idStr);
+                        responseMap.put("estado", "borrado exitoso");
+                    } else {
+                        responseMap.put("estado", "error");
+                        responseMap.put("msg", "No tiene permisos para borrar este empleado");
+                    }
                 } else {
                     responseMap.put("estado", "error");
                     responseMap.put("msg", "no se encontró el empleado con id: " + idStr);
                 }
+
             } else {
                 responseMap.put("estado", "error");
                 responseMap.put("msg", "Debe enviar un ID");
@@ -212,13 +224,23 @@ public class MainController {
     public ResponseEntity borrarTrabajo(@RequestHeader(value = "api-key", required = false) String apiKey,
                                         @RequestParam(value = "id", required = false) String idStr) {
 
-        HashMap<String, Object> responseMap = validarApiKey(apiKey);
+        HashMap<String, Object> responseMap = validarApiKey(apiKey, true);
+        String grupo = "grupo_" + responseMap.get("userKeyId");
+        responseMap.remove("userKeyId");
 
         if (responseMap.get("estado").equals("ok")) {
             if (idStr != null) {
-                if (jobRepository.existsById(idStr)) {
-                    jobRepository.deleteById(idStr);
-                    responseMap.put("estado", "borrado exitoso");
+                Optional<Job> jobOpt = jobRepository.findById(idStr);
+
+                if (jobOpt.isPresent()) {
+                    Job jobTmp = jobOpt.get();
+                    if (jobTmp.getCreatedBy().equals(grupo)) {
+                        jobRepository.deleteById(idStr);
+                        responseMap.put("estado", "borrado exitoso");
+                    } else {
+                        responseMap.put("estado", "error");
+                        responseMap.put("msg", "No tiene permisos para borrar este trabajo");
+                    }
                 } else {
                     responseMap.put("estado", "error");
                     responseMap.put("msg", "no se encontró el trabajo con id: " + idStr);
@@ -235,45 +257,40 @@ public class MainController {
             produces = MediaType.APPLICATION_JSON_VALUE,
             consumes = {MediaType.APPLICATION_FORM_URLENCODED_VALUE})
     public ResponseEntity guardarTrabajo(@RequestHeader(value = "api-key", required = false) String apiKey,
+                                         @RequestParam(value = "update", required = false) String update,
                                          @RequestParam(value = "jobId", required = false) String jobId,
                                          @RequestParam(value = "jobTitle", required = false) String jobTitle,
                                          @RequestParam(value = "minSalary", required = false) String minSalaryStr,
                                          @RequestParam(value = "maxSalary", required = false) String maxSalaryStr) {
 
-        HashMap<String, Object> responseMap = validarApiKey(apiKey,true);
+        HashMap<String, Object> responseMap = validarApiKey(apiKey, true);
         String grupo = "grupo_" + responseMap.get("userKeyId");
         responseMap.remove("userKeyId");
 
         if (responseMap.get("estado").equals("ok")) {
             if (jobId != null && jobTitle != null && minSalaryStr != null && maxSalaryStr != null
                     && !jobId.trim().isEmpty() && !jobTitle.trim().isEmpty()) {
-                if (!jobRepository.existsById(jobId)) {
-                    try {
-                        int minSalary = Integer.parseInt(minSalaryStr);
-                        int maxSalary = Integer.parseInt(maxSalaryStr);
-                        Job job = new Job();
-                        job.setJobId(jobId);
-                        job.setJobTitle(jobTitle);
-                        job.setMinSalary(minSalary);
-                        job.setMaxSalary(maxSalary);
-                        job.setCreatedBy(grupo);
-                        try {
-                            jobRepository.save(job);
-                            responseMap.put("estado", "ok");
-                            responseMap.put("msg", "Trabajo creado exitosamente");
-                        }catch(DataIntegrityViolationException ex){
-                            responseMap.put("estado", "error");
-                            responseMap.put("msg", "consulte a su profesor");
-                            responseMap.put("msg_exception_cause", ex.getMostSpecificCause().getLocalizedMessage());
-                        }
-                    } catch (NumberFormatException ex) {
-                        responseMap.put("estado", "error");
-                        responseMap.put("msg", "Los salarios deben ser números enteros");
-                    }
+
+                Optional<Job> jobOpt = jobRepository.findById(jobId);
+
+                if (!jobOpt.isPresent()) {
+                    llenarTrabajoYguardar(jobId, jobTitle, minSalaryStr, maxSalaryStr, grupo, responseMap, "creado");
                 } else {
-                    responseMap.put("estado", "error");
-                    responseMap.put("msg", "Ya existe un trabajo con ese job_id");
+                    if (update != null && update.equalsIgnoreCase("true")) {
+                        Job jobTmp = jobOpt.get();
+                        if (jobTmp.getCreatedBy().equals(grupo)) {
+                            llenarTrabajoYguardar(jobId, jobTitle, minSalaryStr, maxSalaryStr, grupo, responseMap, "actualizado");
+                        } else {
+                            responseMap.put("estado", "error");
+                            responseMap.put("msg", "No tiene permisos para actualizar este trabajo");
+                        }
+                    } else {
+                        responseMap.put("estado", "error");
+                        responseMap.put("msg", "Ya existe un trabajo con ese job_id");
+                    }
                 }
+
+
             } else {
                 responseMap.put("estado", "error");
                 responseMap.put("msg", "Debe enviar todos los parámetros");
@@ -282,10 +299,38 @@ public class MainController {
         return new ResponseEntity(responseMap, HttpStatus.OK);
     }
 
+    private void llenarTrabajoYguardar(String jobId, String jobTitle, String minSalaryStr, String maxSalaryStr, String grupo,
+                                       HashMap<String, Object> responseMap, String update) {
+        try {
+            int minSalary = Integer.parseInt(minSalaryStr);
+            int maxSalary = Integer.parseInt(maxSalaryStr);
+            Job job = new Job();
+            job.setJobId(jobId);
+            job.setJobTitle(jobTitle);
+            job.setMinSalary(minSalary);
+            job.setMaxSalary(maxSalary);
+            job.setCreatedBy(grupo);
+            try {
+                jobRepository.save(job);
+                responseMap.put("estado", "ok");
+                responseMap.put("msg", "Trabajo " + update + " exitosamente");
+            } catch (DataIntegrityViolationException ex) {
+                responseMap.put("estado", "error");
+                responseMap.put("msg", "consulte a su profesor");
+                responseMap.put("msg_exception_cause", ex.getMostSpecificCause().getLocalizedMessage());
+            }
+        } catch (NumberFormatException ex) {
+            responseMap.put("estado", "error");
+            responseMap.put("msg", "Los salarios deben ser números enteros");
+        }
+    }
+
+
     @PostMapping(value = "/empleado",
             produces = MediaType.APPLICATION_JSON_VALUE,
             consumes = {MediaType.APPLICATION_FORM_URLENCODED_VALUE})
     public ResponseEntity guardarEmpleado(@RequestHeader(value = "api-key", required = false) String apiKey,
+                                          @RequestParam(value = "update", required = false) String update,
                                           @RequestParam(value = "employeeId", required = false) String employeeId,
                                           @RequestParam(value = "firstName", required = false) String firstName,
                                           @RequestParam(value = "lastName", required = false) String lastName,
@@ -297,70 +342,34 @@ public class MainController {
                                           @RequestParam(value = "managerId", required = false) String managerId,
                                           @RequestParam(value = "departmentId", required = false) String departmentIdStr) {
 
-        HashMap<String, Object> responseMap = validarApiKey(apiKey,true);
+        HashMap<String, Object> responseMap = validarApiKey(apiKey, true);
         String grupo = "grupo_" + responseMap.get("userKeyId");
         responseMap.remove("userKeyId");
-
 
         if (responseMap.get("estado").equals("ok")) {
             if (employeeId != null && lastName != null && email != null && jobId != null && managerId != null && departmentIdStr != null
                     && !employeeId.trim().isEmpty() && !lastName.trim().isEmpty()
                     && !email.trim().isEmpty() && !jobId.trim().isEmpty()
                     && !managerId.trim().isEmpty() && !departmentIdStr.trim().isEmpty()) {
-                if (!employeeRepository.existsById(employeeId)) {
-                    try {
 
-                        Employee e = new Employee();
-                        e.setEmployeeId(employeeId);
-                        if(firstName != null) e.setFirstName(firstName);
-                        e.setLastName(lastName);
-                        e.setEmail(email);
-                        if(phoneNumber != null) e.setPhoneNumber(phoneNumber);
-
-                        Job j = new Job();
-                        j.setJobId(jobId);
-                        e.setJobId(j);
-
-                        if(salaryStr != null){
-                            double salary = Double.parseDouble(salaryStr);
-                            e.setSalary(salary);
-                        }
-                        if(commissionPctStr != null){
-                            double commissionPct = Double.parseDouble(commissionPctStr);
-                            e.setCommissionPct(commissionPct);
-                        }
-                        ManagerDto manager = new ManagerDto();
-                        manager.setEmployeeId(managerId);
-                        e.setManagerId(manager);
-
-                        Department d = new Department();
-                        int departmentId = Integer.parseInt(departmentIdStr);
-                        d.setDepartmentId(departmentId);
-                        e.setDepartmentId(d);
-
-                        e.setCreatedBy(grupo);
-
-                        responseMap.remove("userKeyId");
-                        try {
-                            employeeRepository.save(e);
-                            responseMap.put("estado", "ok");
-                            responseMap.put("msg", "Empleado creado exitosamente");
-                        }catch(DataIntegrityViolationException ex){
-                            responseMap.put("estado", "error");
-                            responseMap.put("msg", "consulte a su profesor");
-                            responseMap.put("msg_exception_cause", ex.getMostSpecificCause().getLocalizedMessage());
-                        }catch(JpaObjectRetrievalFailureException ex){
-                            responseMap.put("estado", "error");
-                            responseMap.put("msg", "consulte a su profesor");
-                            responseMap.put("msg_exception_cause", ex.getMostSpecificCause().getLocalizedMessage());
-                        }
-                    } catch (NumberFormatException ex) {
-                        responseMap.put("estado", "error");
-                        responseMap.put("msg", "Los números no están en formato adecuado");
-                    }
+                Optional<Employee> empOpt = employeeRepository.findById(employeeId);
+                if (!empOpt.isPresent()) {
+                    llenarEmpleado(employeeId, firstName, lastName, email, phoneNumber, jobId,
+                            salaryStr, commissionPctStr, managerId, departmentIdStr, grupo, responseMap, "creado");
                 } else {
-                    responseMap.put("estado", "error");
-                    responseMap.put("msg", "Ya existe un empleado con ese employeeId");
+                    if (update != null && update.equalsIgnoreCase("true")) {
+                        Employee employeeTmp = empOpt.get();
+                        if (employeeTmp.getCreatedBy().equals(grupo)) {
+                            llenarEmpleado(employeeId, firstName, lastName, email, phoneNumber, jobId,
+                                    salaryStr, commissionPctStr, managerId, departmentIdStr, grupo, responseMap, "actualizado");
+                        } else {
+                            responseMap.put("estado", "error");
+                            responseMap.put("msg", "No tiene permisos para actualizar este empleado");
+                        }
+                    } else {
+                        responseMap.put("estado", "error");
+                        responseMap.put("msg", "Ya existe un empleado con ese employeeId");
+                    }
                 }
             } else {
                 responseMap.put("estado", "error");
@@ -368,6 +377,58 @@ public class MainController {
             }
         }
         return new ResponseEntity(responseMap, HttpStatus.OK);
+    }
+
+    private void llenarEmpleado(String employeeId, String firstName, String lastName, String email,
+                                String phoneNumber, String jobId, String salaryStr, String commissionPctStr,
+                                String managerId, String departmentIdStr, String grupo,
+                                HashMap<String, Object> responseMap, String update) {
+
+        try {
+            Employee e = new Employee();
+            e.setEmployeeId(employeeId);
+            if (firstName != null) e.setFirstName(firstName);
+            e.setLastName(lastName);
+            e.setEmail(email);
+            if (phoneNumber != null) e.setPhoneNumber(phoneNumber);
+
+            Job j = new Job();
+            j.setJobId(jobId);
+            e.setJobId(j);
+
+            if (salaryStr != null) {
+                double salary = Double.parseDouble(salaryStr);
+                e.setSalary(salary);
+            }
+            if (commissionPctStr != null) {
+                double commissionPct = Double.parseDouble(commissionPctStr);
+                e.setCommissionPct(commissionPct);
+            }
+            ManagerDto manager = new ManagerDto();
+            manager.setEmployeeId(managerId);
+            e.setManagerId(manager);
+
+            Department d = new Department();
+            int departmentId = Integer.parseInt(departmentIdStr);
+            d.setDepartmentId(departmentId);
+            e.setDepartmentId(d);
+
+            e.setCreatedBy(grupo);
+
+            responseMap.remove("userKeyId");
+            try {
+                employeeRepository.save(e);
+                responseMap.put("estado", "ok");
+                responseMap.put("msg", "Empleado " + update + " exitosamente");
+            } catch (DataIntegrityViolationException | JpaObjectRetrievalFailureException ex) {
+                responseMap.put("estado", "error");
+                responseMap.put("msg", "consulte a su profesor");
+                responseMap.put("msg_exception_cause", ex.getMostSpecificCause().getLocalizedMessage());
+            }
+        } catch (NumberFormatException ex) {
+            responseMap.put("estado", "error");
+            responseMap.put("msg", "Los números no están en formato adecuado");
+        }
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
