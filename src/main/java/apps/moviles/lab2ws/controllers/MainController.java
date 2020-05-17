@@ -68,7 +68,7 @@ public class MainController {
         }
     }
 
-    private HashMap<String, Object> validarApiKey(String apiKey, Boolean... getuserKeyId) {
+    private HashMap<String, Object> validarApiKey(String apiKey, Boolean getuserKeyId) {
         HashMap<String, Object> responseMap = new HashMap<>();
 
         if (apiKey != null) {
@@ -81,7 +81,7 @@ public class MainController {
                     userKeysRepository.save(userKeys);
                     responseMap.put("estado", "ok");
                     responseMap.put("cuota", userKeys.getCuota());
-                    if (getuserKeyId != null) {
+                    if (getuserKeyId) {
                         responseMap.put("userKeyId", userKeys.getId());
                     }
                     return responseMap;
@@ -106,7 +106,7 @@ public class MainController {
     @GetMapping(value = "/listar/empleados", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity listarEmpleados(@RequestHeader(value = "api-key", required = false) String apiKey) {
 
-        HashMap<String, Object> responseMap = validarApiKey(apiKey);
+        HashMap<String, Object> responseMap = validarApiKey(apiKey,false);
 
         if (responseMap.get("estado").equals("ok")) {
             responseMap.put("empleados", employeeRepository.findAll());
@@ -117,7 +117,7 @@ public class MainController {
 
     @GetMapping(value = "/listar/trabajos", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity listarTrabajos(@RequestHeader(value = "api-key", required = false) String apiKey) {
-        HashMap<String, Object> responseMap = validarApiKey(apiKey);
+        HashMap<String, Object> responseMap = validarApiKey(apiKey,false);
 
         if (responseMap.get("estado").equals("ok")) {
             responseMap.put("trabajos", jobRepository.findAll());
@@ -129,7 +129,7 @@ public class MainController {
     @GetMapping(value = "/listar/departamentos", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity listarDepartamentos(@RequestHeader(value = "api-key", required = false) String apiKey) {
 
-        HashMap<String, Object> responseMap = validarApiKey(apiKey);
+        HashMap<String, Object> responseMap = validarApiKey(apiKey,false);
 
         if (responseMap.get("estado").equals("ok")) {
             responseMap.put("departamentos", departmentRepository.findAll());
@@ -141,7 +141,7 @@ public class MainController {
     public ResponseEntity buscarDepaPorNombreCorto(@RequestHeader(value = "api-key", required = false) String apiKey,
                                                    @RequestParam(value = "nombre_corto", required = false) String nombreCorto) {
 
-        HashMap<String, Object> responseMap = validarApiKey(apiKey);
+        HashMap<String, Object> responseMap = validarApiKey(apiKey,false);
 
         if (responseMap.get("estado").equals("ok")) {
             if (nombreCorto != null) {
@@ -159,7 +159,7 @@ public class MainController {
     public ResponseEntity buscarDepartamentosPorId(@RequestHeader(value = "api-key", required = false) String apiKey,
                                                    @RequestParam(value = "id", required = false) String idStr) {
 
-        HashMap<String, Object> responseMap = validarApiKey(apiKey);
+        HashMap<String, Object> responseMap = validarApiKey(apiKey,false);
 
         if (responseMap.get("estado").equals("ok")) {
             if (idStr != null) {
@@ -170,7 +170,7 @@ public class MainController {
                         responseMap.put("departamento", opt.get());
                     } else {
                         responseMap.put("estado", "error");
-                        responseMap.put("msg", "no se encontró el producto con id: " + id);
+                        responseMap.put("msg", "no se encontró el departamento con id: " + id);
                     }
                 } catch (NumberFormatException ex) {
                     responseMap.put("estado", "error");
