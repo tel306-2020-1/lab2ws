@@ -5,15 +5,20 @@ import apps.moviles.lab2ws.repository.DepartmentRepository;
 import apps.moviles.lab2ws.repository.EmployeeRepository;
 import apps.moviles.lab2ws.repository.JobRepository;
 import apps.moviles.lab2ws.repository.UserKeysRepository;
+import org.hibernate.exception.ConstraintViolationException;
+import org.hibernate.exception.DataException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -236,6 +241,8 @@ public class MainController {
                                          @RequestParam(value = "maxSalary", required = false) String maxSalaryStr) {
 
         HashMap<String, Object> responseMap = validarApiKey(apiKey,true);
+        String grupo = "grupo_" + responseMap.get("userKeyId");
+        responseMap.remove("userKeyId");
 
         if (responseMap.get("estado").equals("ok")) {
             if (jobId != null && jobTitle != null && minSalaryStr != null && maxSalaryStr != null
@@ -249,12 +256,16 @@ public class MainController {
                         job.setJobTitle(jobTitle);
                         job.setMinSalary(minSalary);
                         job.setMaxSalary(maxSalary);
-                        job.setCreatedBy("grupo_" + responseMap.get("userKeyId"));
-                        jobRepository.save(job);
-                        responseMap.remove("userKeyId");
-                        responseMap.put("estado", "ok");
-                        responseMap.put("msg", "Trabajo creado exitosamente");
-
+                        job.setCreatedBy(grupo);
+                        try {
+                            jobRepository.save(job);
+                            responseMap.put("estado", "ok");
+                            responseMap.put("msg", "Trabajo creado exitosamente");
+                        }catch(DataIntegrityViolationException ex){
+                            responseMap.put("estado", "error");
+                            responseMap.put("msg", "consulte a su profesor");
+                            responseMap.put("msg_exception_cause", ex.getMostSpecificCause().getLocalizedMessage());
+                        }
                     } catch (NumberFormatException ex) {
                         responseMap.put("estado", "error");
                         responseMap.put("msg", "Los salarios deben ser números enteros");
@@ -287,6 +298,9 @@ public class MainController {
                                           @RequestParam(value = "departmentId", required = false) String departmentIdStr) {
 
         HashMap<String, Object> responseMap = validarApiKey(apiKey,true);
+        String grupo = "grupo_" + responseMap.get("userKeyId");
+        responseMap.remove("userKeyId");
+
 
         if (responseMap.get("estado").equals("ok")) {
             if (employeeId != null && lastName != null && email != null && jobId != null && managerId != null && departmentIdStr != null
@@ -297,10 +311,16 @@ public class MainController {
                     try {
 
                         Employee e = new Employee();
+                        e.setEmployeeId(employeeId);
                         if(firstName != null) e.setFirstName(firstName);
                         e.setLastName(lastName);
                         e.setEmail(email);
                         if(phoneNumber != null) e.setPhoneNumber(phoneNumber);
+
+                        Job j = new Job();
+                        j.setJobId(jobId);
+                        e.setJobId(j);
+
                         if(salaryStr != null){
                             double salary = Double.parseDouble(salaryStr);
                             e.setSalary(salary);
@@ -318,13 +338,22 @@ public class MainController {
                         d.setDepartmentId(departmentId);
                         e.setDepartmentId(d);
 
-                        e.setCreatedBy("grupo_" + responseMap.get("userKeyId"));
+                        e.setCreatedBy(grupo);
 
-                        employeeRepository.save(e);
                         responseMap.remove("userKeyId");
-                        responseMap.put("estado", "ok");
-                        responseMap.put("msg", "Empleado creado exitosamente");
-
+                        try {
+                            employeeRepository.save(e);
+                            responseMap.put("estado", "ok");
+                            responseMap.put("msg", "Empleado creado exitosamente");
+                        }catch(DataIntegrityViolationException ex){
+                            responseMap.put("estado", "error");
+                            responseMap.put("msg", "consulte a su profesor");
+                            responseMap.put("msg_exception_cause", ex.getMostSpecificCause().getLocalizedMessage());
+                        }catch(JpaObjectRetrievalFailureException ex){
+                            responseMap.put("estado", "error");
+                            responseMap.put("msg", "consulte a su profesor");
+                            responseMap.put("msg_exception_cause", ex.getMostSpecificCause().getLocalizedMessage());
+                        }
                     } catch (NumberFormatException ex) {
                         responseMap.put("estado", "error");
                         responseMap.put("msg", "Los números no están en formato adecuado");
